@@ -1,0 +1,26 @@
+name: Windows
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake -S . -B build -A x64
+          cmake --build build --config Release
+      - name: Trial
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'FileOpRaceTrial'
+          New-Item -ItemType Directory -Path (Join-Path $root 'bait'), (Join-Path $root 'canary') -Force | Out-Null
+          [IO.File]::WriteAllText((Join-Path $root 'bait\check.txt'), 'bait')
+          [IO.File]::WriteAllText((Join-Path $root 'canary\check.txt'), 'canary')
+          & .\build\Release\FileOpRace.exe trial (Join-Path $root 'link') (Join-Path $root 'bait\check.txt') (Join-Path $root 'canary\check.txt') --timeout 15000 --demo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (Test-Path -LiteralPath (Join-Path $root 'link')) { throw 'junction left behind' }
